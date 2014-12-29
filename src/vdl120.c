@@ -36,8 +36,11 @@
 
 #define VID 0x10c4 /* Cygnal Integrated Products, Inc. */
 #define PID 0x0003 /* Silabs C8051F320 USB Board */
-#define EP_IN  0x81
-#define EP_OUT 0x02
+#define PID2 0xea61
+//#define EP_IN  0x81
+//#define EP_OUT 0x02
+int EP_IN = 0;
+int EP_OUT = 0;
 #define BUFSIZE 64 /* wMaxPacketSize = 1x 64 bytes */
 #define TIMEOUT 5000
 #define TEMP_MIN -40 /* same with celsius and fahrenheit */
@@ -45,6 +48,8 @@
 #define TEMP_MAX_F 158
 #define RH_MIN 0
 #define RH_MAX 100
+
+#define ERR(...) do { fprintf(stderr, "ERR: %s:%d: ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); } while (0)
 
 
 /* struct definitions */
@@ -183,7 +188,7 @@ read_config(
 	);
 	if (ret < 0)
 	{
-		printf("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
+		ERR("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
 		return NULL;
 	}
 /*
@@ -214,7 +219,7 @@ read_config(
 	);
 	if (ret < 0)
 	{
-		printf("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
+		ERR("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
 		return NULL;
 	}
 	
@@ -288,7 +293,7 @@ write_config(
 	);
 	if (ret < 0)
 	{
-		printf("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
+        ERR("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
 		return 1;
 	}
 	
@@ -407,7 +412,7 @@ read_data(
 			);
 			if (ret < 0)
 			{
-				printf("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
+				ERR("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
 				return NULL;
 			}
 /*
@@ -432,7 +437,7 @@ read_data(
 		);
 		if (ret < 0)
 		{
-			printf("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
+			ERR("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
 			return NULL;
 		}
 
@@ -592,7 +597,7 @@ build_config(
 		printf("build_config: failed to malloc struct config\n");
 		return NULL;
 	}
-	memset(cfg, 0, sizeof(cfg));
+	memset(cfg, 0, sizeof(*cfg));
 	
 	cfg->config_begin = 0xce;
 	cfg->config_end = 0xce;
@@ -772,7 +777,7 @@ int main (int argc, char **argv)
 		for (dev_cur = bus_cur->devices; dev_cur != NULL; dev_cur = dev_cur->next)
 		{
 			if (dev_cur->descriptor.idVendor == VID &&
-				dev_cur->descriptor.idProduct == PID)
+				( dev_cur->descriptor.idProduct == PID  || dev_cur->descriptor.idProduct == PID2))
 			{
 				dev = dev_cur;
 				break;
@@ -790,11 +795,14 @@ int main (int argc, char **argv)
 	}
 	
 	dev_hdl = usb_open(dev);
+
 	if (dev_hdl == NULL)
 	{
 		printf("usb_open failed: %s\n", usb_strerror());
 		goto cleanup;
 	}
+    EP_OUT = dev->config[0].interface[0].altsetting[0].endpoint[0].bEndpointAddress;
+    EP_IN = dev->config[0].interface[0].altsetting[0].endpoint[1].bEndpointAddress;
 	
 	ret = usb_reset(dev_hdl);
 	if (ret < 0)
@@ -953,7 +961,7 @@ int main (int argc, char **argv)
 	}
 	else
 	{
-		printf("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
+		ERR("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
 		printf("buf: ");
 		for (i = 0; i < 64; i++)
 		{
@@ -1087,7 +1095,7 @@ int main (int argc, char **argv)
 		}
 		else
 		{
-			printf("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
+			ERR("usb_bulk_read failed with code %i: %s\n", ret, usb_strerror());
 			printf("buf: ");
 			for (i = 0; i < 64; i++)
 			{
