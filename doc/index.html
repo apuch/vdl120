@@ -1,0 +1,128 @@
+<html>
+  <head>
+    <title>vdl120: Das Voltcraft DL-120TH Tool</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf8"/>
+    <style type="text/css">
+      body{font-family:sans-serif}
+      h1,h2,h3{font-weight:normal}
+      h2{border-bottom:solid 1px #a8a8a8}
+      td{vertical-align:center}
+      pre{border-left:solid 4px #a8a8a8;padding-left:1em}
+      ul{padding-left:1.5em}
+    </style>
+  </head>
+  <body>
+    <p><img src="sourceforge.png" style="vertical-align:middle;height:1em;width:auto"> Zur SourceForge.net <a href="http://sourceforge.net/projects/vdl120/">Projektseite</a></p>
+    <p><img src="english.png" style="vertical-align:middle;height:1em;width:auto"> If you would like to see this page in English, <a href="http://sourceforge.net/projects/vdl120/">let me know</a>.</p>
+    <h1>VDL120: Das Voltcraft DL-120TH Tool</h1>
+    <div>
+      <img src="voltcraft-dl-120th.jpg" title="Voltcraft DL-120TH Datenlogger" alt="Voltcraft DL-120TH Datenlogger"/>
+    </div>
+    <p>Der <b>Voltcraft DL-120TH</b> (vertrieben von <a href="http://www.conrad.de/ce/de/product/100040/Voltcraft-DL-120-TH-Mess-Datenlogger">Conrad Electronic</a>) ist ein USB-Datenlogger für Temperatur und Luftfeuchtigkeit. </p>
+    <p>Das Tool <b>vdl120</b> ermöglicht die Benutzung des Datenloggers unter Linux, Mac OS X, FreeBSD und anderen Betriebssystemen mit <a href="http://libusb.org/">libusb</a>. Erfolgreich getestet wurde die Software bis jetzt nur unter Linux.</p>
+
+    <h2>Funktionen</h2>
+    <p>Das vdl120-Tool bietet die wichtigsten Funktionen der Original-Software:</p>
+    <ul>
+      <li>Konfiguration des Loggers</li>
+      <li>Auslesen der Konfiguration</li>
+      <li>Auslesen der Messdaten</li>
+      <li>Speichern der Messdaten</li>
+    </ul>
+    <p>Zur grafischen Darstellung der Messdaten kann man z.B. <a href="http://gnuplot.info/">Gnuplot</a> verwenden. Ein Beispiel-Skript ist im Abschnitt <i>Verwendung</i> zu finden.</p>
+
+    <h2>Download</h2>
+    <p>Via <a href="http://sourceforge.net/projects/vdl120/files/">SourceForge.net</a></p>
+
+    <h2>Abhängigkeiten</h2>
+    <ul>
+      <li><a href="http://libusb.org/">libusb-0.1</a></li>
+    </ul>
+
+    <h2>Verwendung</h2>
+    <p>Die Bedienung erfolgt über die Kommandozeile, ohne grafische Oberfläche:</p>
+    <pre>vdl120 -c LOGNAME NUM_DATA INTERVAL  -->  configure logger
+vdl120 -i  -->  print config
+vdl120 -p  -->  print data
+vdl120 -s  -->  store data in LOGNAME.dat</pre>
+
+    <h3>Konfiguration des Loggers</h3>
+    <p>Das Tool wird mit dem Parameter <code>-c</code> aufgerufen, gefolgt vom Namen des Loggers, der Anzahl der Messpunkte und dem Messintervall in Sekunden:</p>
+    <pre>vdl120 -c "Logging Name" 16000 60</pre>
+    <p>Der Name darf aus maximal 16 Zeichen bestehen.</p>
+    <p>Für die Anzahl der Messpunkte sind in der Original-Software folgende Werte vorgesehen: 50, 100, 500, 1000, 2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000.</p>
+    <p>Für das Messintervall sind folgende Werte vorgesehen: 2s, 5s, 10s, 30s, 1m, 5m, 10m, 30m, 1h, 2h, 3h, 6h, 12h, 24h.</p>
+    <p>Ausgegeben wird die aktuelle Konfiguration des Loggers, siehe <i>Auslesen der Konfiguration</i>.</p>
+
+    <h3>Auslesen der Konfiguration</h3>
+    <p>Das Tool wird mit dem Parameter <code>-i</code> aufgerufen:
+    <pre>vdl120 -i</pre>
+    <p>Die Ausgabe sieht etwa so aus:</p>
+    <pre>config->name =               Logging Name
+config->num_data_conf =      16000
+config->num_data_rec =       126
+config->interval =           60
+config->time_year =          2010
+config->time_mon =           7
+config->time_mday =          1
+config->time_hour =          14
+config->time_min =           40
+config->time_sec =           30
+config->temp_is_fahrenheit = 0
+config->led_conf =           0x0a (freq=10, alarm=0)
+config->start =              0x02 (automatic)
+config->thresh_temp_low =    0
+config->thresh_temp_high =   40
+config->thresh_rh_low =      35
+config->thresh_rh_high =     75</pre>
+    <p>Achtung: Beim Auslesen der Konfiguration wird die aktuelle Messung abgebrochen!</p>
+
+    <h3>Auslesen der Messdaten</h3>
+    <p>Das Tool wird mit dem Parameter <code>-p</code> aufgerufen:
+    <pre>vdl120 -p</pre>
+    <p>Die Ausgabe sieht etwa so aus:</p>
+    <pre>1277995230 27.4 52.4
+1277995290 27.5 51.5
+1277995350 27.3 51.8
+1277995410 27.2 52.1
+1277995470 27.1 52.4
+[...]</pre>
+    <p>Pro Zeile wird ein Messpunkt ausgegeben, bestehend aus Zeitstempel (UNIX Zeit, GMT), Temperatur (in °C) und Luftfeuchtigkeit (in %).</p>
+
+    <h3>Speichern der Messdaten</h3>
+    <p>Das Tool wird mit dem Parameter <code>-s</code> aufgerufen:
+    <pre>vdl120 -s</pre>
+    <p>Die Messdaten werden automatisch in die Datei LOGNAME.dat (also z.B. "Logging Name.dat") gespeichert. Falls die Datei bereits existiert, werden die neuen Messdaten angehängt. Das Format ist dasselbe wie beim <i>Auslesen der Messdaten</i>. Zusätzlich wird vor den Messdaten eine Kommentar-Zeile mit Startzeit, Anzahl der Messpunkte und Messintervall gespeichert:</p>
+    <pre># [2010-07-01 14:40:30] 126 points @ 60 sec
+1277995230 27.4 52.4
+1277995290 27.5 51.5
+1277995350 27.3 51.8
+[...]</pre>
+
+    <h3>Plotten mit Gnuplot</h3>
+    <p>Zur grafischen Darstellung der Messdaten mit Gnuplot kann man das Skript <a href="messung.plt">messung.plt</a> verwenden:</p>
+    <pre>#!/usr/bin/gnuplot -persist
+
+# Ausgabe in PNG Datei
+#set terminal png nocrop enhanced font "/usr/share/fonts/corefonts/verdana.ttf" 10 size 800,600
+#set output 'messung.png'
+
+set title "Messung"
+set xdata time
+set timefmt "%s"
+set format x "%d.%m.%Y %H:%M"
+set xtics nomirror rotate by -60
+set grid
+
+plot "messung.dat" using 1:2 with points lt 1 title "Temp / °C", \
+     "messung.dat" using 1:3 with points lt 2 title "RLF / %"
+
+# Darstellung des 24h-Verlaufs
+#set format x "%H:%M"
+#plot "messung.dat" using (int($1) % 86400):2 with dots lt 1 title "Temp / °C", \
+#     "messung.dat" using (int($1) % 86400):3 with dots lt 2 title "RLF / %"</pre>
+
+    <p>Das Skript als messung.plt speichern, mit <code>chmod +x messung.plt</code> ausführbar machen und mit <code>./messung.plt</code> aufrufen. Das Ergebnis:</p>
+    <p><img src="messung.wxt.png" title="Gnuplot" alt="Gnuplot" style="border:solid 1px #a8a8a8"/></p>
+  </body>
+</html>

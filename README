@@ -1,0 +1,34 @@
+vdl120
+    Software for the Voltcraft DL-120TH USB climate data logger
+
+WWW
+    http://vdl120.sourceforge.net/
+    http://sourceforge.net/projects/vdl120/
+
+INSTALL
+    make && make install
+    
+    For 'make install' you have to be root.
+
+USE
+    vdl120 -c LOGNAME NUM_DATA INTERVAL  -->  configure logger
+    vdl120 -i  -->  print config
+    vdl120 -p  -->  print data
+    vdl120 -s  -->  store data in LOGNAME.dat
+    
+    For more info see the doc/ folder.
+
+AUTHOR
+    milahu at gmail dot com
+
+HISTORY
+    2010-07-01 initial release, version 1.0
+
+LICENSE
+    Public Domain
+
+WARRANTY DISCLAIMER
+    The software is provided "as is" without any representation or warranty,
+    expressed or implied, of any kind, including, but not limited to,
+    warranties of merchantability, non-infringement, or fitness for any
+    particular purpose.
