@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <usb.h>
 #include <time.h>
 
@@ -37,10 +38,10 @@
 #define VID 0x10c4 /* Cygnal Integrated Products, Inc. */
 #define PID 0x0003 /* Silabs C8051F320 USB Board */
 #define PID2 0xea61
-//#define EP_IN  0x81
-//#define EP_OUT 0x02
-int EP_IN = 0;
-int EP_OUT = 0;
+#define EP_IN_DEFAULT  0x81
+#define EP_OUT_DEFAULT 0x02
+int EP_IN = EP_IN_DEFAULT;
+int EP_OUT = EP_OUT_DEFAULT;
 #define BUFSIZE 64 /* wMaxPacketSize = 1x 64 bytes */
 #define TIMEOUT 5000
 #define TEMP_MIN -40 /* same with celsius and fahrenheit */
@@ -70,10 +71,10 @@ struct config {
 /* 31    */  char time_min;
 /* 32    */  char time_sec;
 /* 33    */  char temp_is_fahrenheit;
-/* 34    */  char led_conf; /* bit 0: alarm on/off, bits 1-2: 10 (?), bits 3-7: flash frequency in seconds */
+/* 34    */  unsigned char led_conf; /* bit 0: alarm on/off, bits 1-2: 10 (?), bits 3-7: flash frequency in seconds */
 // 35 ?!
 /* 35-50 */  char name[16]; /* config name. actually just 16 bytes: 35-50 */
-/* 51    */  char start; /* 0x02 = start logging immediately; 0x01 = start logging manually */
+/* 51    */  unsigned char start; /* 0x02 = start logging immediately; 0x01 = start logging manually */
 /* 52-53 */  short int padding52;
 /* 54-55 */  short int thresh_rh_low;
 /* 56-57 */  short int padding56;
@@ -114,7 +115,7 @@ build_config(
 	int temp_is_fahrenheit,         /* bool: temp is fahrenheit */
 	int led_alarm,                  /* bool: led alarm */
 	int led_freq,                   /* led frequency in seconds */
-	int start                       /* start loggin: 1 = manually, 2 = automatically */
+	int start                       /* start logging: 1 = manually, 2 = automatically */
 );
 
 void
@@ -549,7 +550,7 @@ print_config(
 	char *line_prefix   /* prefix to print before each line */
 ) {
 	//printf("%sconfig_begin =       0x%02x\n", line_prefix, cfg->config_begin);
-	printf("%sname =               %s\n",   line_prefix, cfg->name);
+	printf("%sname =               %.16s\n",   line_prefix, cfg->name);
 	printf("%snum_data_conf =      %i\n",   line_prefix, cfg->num_data_conf);
 	printf("%snum_data_rec =       %i\n",   line_prefix, cfg->num_data_rec);
 	printf("%sinterval =           %i\n",   line_prefix, cfg->interval);
@@ -561,12 +562,13 @@ print_config(
 	printf("%stime_sec =           %i\n",   line_prefix, cfg->time_sec);
 	printf("%stemp_is_fahrenheit = %i\n",   line_prefix, cfg->temp_is_fahrenheit);
 	printf("%sled_conf =           0x%02x (freq=%i, alarm=%i)\n",
-		line_prefix, cfg->led_conf, (cfg->led_conf & 0x1F), (cfg->led_conf & 0x80 >> 7));
+		line_prefix, cfg->led_conf, (cfg->led_conf & 0x1F), ((cfg->led_conf & 0x80)?1:0));
 	printf("%sstart =              0x%02x", line_prefix, cfg->start);
-	if (cfg->start == 1)
+	if (cfg->start == 1) {
 		printf(" (manual)");
-	if (cfg->start == 2)
+	} else if (cfg->start == 2) {
 		printf(" (automatic)");
+        }
 	printf("\n");
 	printf("%sthresh_temp_low =    %i\n",   line_prefix, bin2num(cfg->thresh_temp_low));
 	printf("%sthresh_temp_high =   %i\n",   line_prefix, bin2num(cfg->thresh_temp_high));
@@ -588,7 +590,7 @@ build_config(
 	int temp_is_fahrenheit,         /* bool: temp is fahrenheit */
 	int led_alarm,                  /* bool: led alarm */
 	int led_freq,                   /* led frequency in seconds */
-	int start                       /* start loggin: 1 = manually, 2 = automatically */
+	int start                       /* start logging: 1 = manually, 2 = automatically */
 ) {
 	struct config *cfg = NULL;
 	cfg = malloc(sizeof(struct config));
@@ -628,12 +630,15 @@ build_config(
 	
 	cfg->temp_is_fahrenheit = temp_is_fahrenheit & 1;
 	
-	cfg->led_conf = (led_alarm & 1 << 7) | (led_freq & 0x1F);
+	cfg->led_conf = (led_alarm ? (1<<7):0) | (led_freq & 0x1F);
 	
+	memset(cfg->name, 0, sizeof(cfg->name)); // Make sure EOS '\0' is in place
 	strncpy(cfg->name, name, 16);
 	
 	cfg->thresh_rh_low  = num2bin(thresh_rh_low);
 	cfg->thresh_rh_high = num2bin(thresh_rh_high);
+
+printf("START %02X\n",	cfg->start);
 	
 	return cfg;
 }
@@ -644,7 +649,7 @@ check_config(
 	struct config *cfg /* config struct */
 ) {
 	
-	if (0 == strlen(cfg->name))
+	if (0 == strnlen(cfg->name,16))
 	{
 		printf("check_config: empty name\n");
 		return 1;
@@ -727,16 +732,38 @@ check_config(
 	return 0;
 }
 
+
+void usage(char *program) {
+	fprintf(stderr, "Usage:\n"),
+	fprintf(stderr, "  %s -c LOGNAME NUM_DATA INTERVAL  -->  configure logger\n", program);
+	fprintf(stderr, "  %s <CONFIGOPTIONS> -c LOGNAME NUM_DATA INTERVAL  -->  configure logger with more options (see below)\n", program);
+	fprintf(stderr, "  %s -i  -->  print config\n", program);
+	fprintf(stderr, "  %s -p  -->  print data\n", program);
+	fprintf(stderr, "  %s -s  -->  store data in LOGNAME.dat\n", program);
+	fprintf(stderr, " CONFIGOPTIONS\n");
+	fprintf(stderr, "   -m         Manual start\n");
+	fprintf(stderr, "   -a         Automatic start\n");
+	fprintf(stderr, "   -x         Disable alarm\n");
+	fprintf(stderr, "   -X         Enable alarm\n");
+	fprintf(stderr, "   -b PERIOD  Blink period (10/20/30)\n");
+	fprintf(stderr, "   -F         Use Fahrenheit\n");
+	fprintf(stderr, "   -C         Use Celcius\n");
+	fprintf(stderr, "   -t DEGREES Minimum temperature threshold (Alarm)\n");
+	fprintf(stderr, "   -T DEGREES Maximum temperature threshold (Alarm)\n");
+	fprintf(stderr, "   -h RELHUM  Minimum relative humidity threshold (Alarm)\n");
+	fprintf(stderr, "   -H RELHUM  Maximum relative humidity threshold (Alarm)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "Example:\n");
+	fprintf(stderr, "  %s -m -x -b 30 -C -t 10 -T 35 -h 30 -H 60 -c ExampleName 150 5\n", program);
+
+}
+
 int main (int argc, char **argv)
 {
 
 	if (argc < 2)
 	{
-		printf("usage:\n"),
-		printf("  %s -c LOGNAME NUM_DATA INTERVAL  -->  configure logger\n", argv[0]);
-		printf("  %s -i  -->  print config\n", argv[0]);
-		printf("  %s -p  -->  print data\n", argv[0]);
-		printf("  %s -s  -->  store data in LOGNAME.dat\n", argv[0]);
+		usage(argv[0]);
 		return 1;
 	}
 	
@@ -745,8 +772,7 @@ int main (int argc, char **argv)
 	
 	struct tm *log_start = NULL;
 	
-	char *buf = NULL;
-	buf = malloc(sizeof(char)*BUFSIZE);
+	char buf[BUFSIZE];
 	
 	struct usb_bus *busses;
 	struct usb_bus *bus_cur;
@@ -801,8 +827,15 @@ int main (int argc, char **argv)
 		printf("usb_open failed: %s\n", usb_strerror());
 		goto cleanup;
 	}
+
+if(  dev->descriptor.idProduct == PID2) { // Was not working for "PID", so only applying for PID2
     EP_OUT = dev->config[0].interface[0].altsetting[0].endpoint[0].bEndpointAddress;
     EP_IN = dev->config[0].interface[0].altsetting[0].endpoint[1].bEndpointAddress;
+} else {
+	EP_IN = EP_IN_DEFAULT;
+	EP_OUT = EP_OUT_DEFAULT;
+}
+	
 	
 	ret = usb_reset(dev_hdl);
 	if (ret < 0)
@@ -826,28 +859,75 @@ int main (int argc, char **argv)
 	}
 	
 	
+  	
+      
+	/* get options */
+        int opt;
+	int maxTemp=40;
+	int minTemp=0;
+	int maxHum=75;
+	int minHum=35;
+	int useFahrenheit=0;
+	int ledAlarm=0;
+	int ledFreq=10;
+        bool automaticStart=true;
+        enum { CMD_NONE, CMD_CONFIG, CMD_PRINT_CONFIG, CMD_PRINT_DATA, CMD_STORE_DATA } cmd;
+	while ((opt = getopt(argc, argv, "cipsmab:t:T:h:H:FCxX")) != -1) {
+        	switch (opt) {
+        	case 'c': cmd=CMD_CONFIG; break;
+        	case 'i': cmd=CMD_PRINT_CONFIG; break;
+        	case 'p': cmd=CMD_PRINT_DATA; break;
+        	case 's': cmd=CMD_STORE_DATA; break;
+        	case 'm': automaticStart=false; break;
+        	case 'a': automaticStart=true; break;
+        	case 'b': ledFreq = atoi(optarg); break;
+        	case 't': minTemp=atoi(optarg); break;
+        	case 'T': maxTemp=atoi(optarg); break;
+        	case 'h': minHum=atoi(optarg); break;
+        	case 'H': maxHum=atoi(optarg); break;
+        	case 'F': useFahrenheit=1; break;
+        	case 'C': useFahrenheit=0; break;
+        	case 'x': ledAlarm=0; break;
+        	case 'X': ledAlarm=1; break;
+	        default:
+	            usage(argv[0]);
+	            exit(EXIT_FAILURE);
+	        }
+	}
+        // For further options, see optind.  If >= argc, no further arguments  
+        // If it is >= argc, there were no non-option arguments.
+
 	
-	/* configure logger */
-	
-	if (0 == strcmp(argv[1], "-c"))
+        /* configure logger */
+	switch(cmd) {
+	default:
+	case CMD_NONE:
+		usage(argv[0]);
+		exit(EXIT_FAILURE);
+	case CMD_CONFIG:
 	{
-		struct config *cfg = NULL;
-		int num_data = atoi(argv[3]);
-		int interval = atoi(argv[4]);
+		struct config *cfg;
+        	if(optind+3!=argc) {
+			usage(argv[0]);
+			fprintf(stderr, "** ERR: Incorrect parameter count\n");
+			exit(EXIT_FAILURE);
+        	}
+		char *name   = argv[optind++];
+		int num_data = atoi(argv[optind++]);
+		int interval = atoi(argv[optind++]);
 		
 		/* at this point, the original software would do read_config(), */
 		/* which seems not to be necessary for correct operation. */
 		//cfg = read_config(dev_hdl);
 		
 		cfg = build_config(
-			argv[2], // name
+			name, // name
 			num_data, interval,
-			0, 40, // temp thresh
-			35, 75, // rh thresh
-			0, // fahrenheit
-			0, 10, // led alarm, frequency
-			// 1 // start manual
-			2 // start automatic
+			minTemp, maxTemp, // temp thresh
+			minHum,maxHum, // rh thresh
+			useFahrenheit, // fahrenheit
+			ledAlarm, ledFreq, // led alarm, frequency
+			automaticStart?2:1 // 1 // start manual // start automatic
 		);
 		print_config(cfg, "config->");
 		if (0 != check_config(cfg))
@@ -855,26 +935,29 @@ int main (int argc, char **argv)
 			printf("config invalid!\n");
 			goto cleanup;
 		}
+                printf("Sending config\n");
 		write_config(dev_hdl, cfg);
 		
 		free(cfg); cfg = NULL;
 	}
-	
+	break;
+	case CMD_PRINT_CONFIG:
 	/* print config */
-	
-	if (0 == strcmp(argv[1], "-i"))
 	{
-		struct config *cfg = NULL;
+		struct config *cfg;
 		
 		cfg = read_config(dev_hdl);
-		print_config(cfg, "config->");
-		
-		free(cfg); cfg = NULL;
+		if(cfg==NULL) {
+			printf("config not read!\n");
+			exit(EXIT_FAILURE);
+        	} else {
+			print_config(cfg, "config->");
+			free(cfg);
+                }
 	}
-	
+	break;
+	case CMD_PRINT_DATA:
 	/* print data */
-	
-	if (0 == strcmp(argv[1], "-p"))
 	{
 		struct config *cfg = NULL;
 		struct data *data_first;
@@ -885,9 +968,9 @@ int main (int argc, char **argv)
 		
 		free(cfg); cfg = NULL;
 	}
-	
+	break;
+	case CMD_STORE_DATA:
 	/* store log data in file */
-	if (0 == strcmp(argv[1], "-s"))
 	{
 		struct config *cfg = NULL;
 		cfg = read_config(dev_hdl);
@@ -899,6 +982,8 @@ int main (int argc, char **argv)
 		store_data(cfg, data_first);
 		free(cfg); cfg = NULL;
 	}
+	break;
+        }
 	
 	goto cleanup;
 	
@@ -1146,7 +1231,6 @@ printf("ok loop\n");
 	free(cur_time);
 	
 cleanup:
-	free(buf);
 	if (log_start != NULL)
 		free(log_start);
 	if (dev_hdl != NULL)
